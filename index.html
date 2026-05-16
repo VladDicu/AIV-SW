@@ -68,9 +68,11 @@
 
         <div class="terminal" id="term"></div>
     </div>
-
-    <script>
+<script>
         const API_URL = "https://aiv-core-api.onrender.com";
+        // Generăm o sesiune unică pentru acest tab
+        const sessionId = Math.random().toString(36).substring(2, 15);
+        
         let currentLang = "ro";
 
         const dictionary = {
@@ -107,11 +109,12 @@
 
         async function updateStatus() {
             try {
-                const res = await fetch(`${API_URL}/status`);
+                const res = await fetch(`${API_URL}/status/${sessionId}`);
                 const data = await res.json();
                 document.getElementById('lvl').innerText = data.level;
                 document.getElementById('xp').innerText = data.xp;
                 document.getElementById('acc').innerText = data.accuracy + "%";
+                if(data.learning_rate) document.getElementById('lr').innerText = data.learning_rate;
             } catch (e) {
                 document.getElementById('lvl').innerText = "OFFLINE";
             }
@@ -129,13 +132,13 @@
                 const res = await fetch(`${API_URL}/execute`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task: task })
+                    body: JSON.stringify({ task: task, session_id: sessionId })
                 });
                 
                 const data = await res.json();
                 log(data.response);
                 
-                if (data.optimizer_used !== "None") {
+                if (data.optimizer_used && data.optimizer_used !== "None") {
                     log(`${dictionary[currentLang].optAlert} ${data.optimizer_used}`, false);
                 }
 
@@ -149,5 +152,6 @@
         log(dictionary[currentLang].init);
         updateStatus();
     </script>
+    
 </body>
 </html>
