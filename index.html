@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>AIV-S/W | Control Panel</title>
+    <style>
+        :root {
+            --bg: #050505;
+            --glass: rgba(22, 22, 29, 0.8);
+            --border: rgba(255, 255, 255, 0.08);
+            --accent: #38bdf8;
+            --text: #e2e8f0;
+        }
+
+        body { 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+            background: radial-gradient(circle at top, #111827 0%, var(--bg) 100%);
+            color: var(--text); margin: 0; padding: 2rem; min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        .container { width: 100%; max-width: 900px; }
+
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; width: 100%; }
+        .lang-btn { background: var(--glass); border: 1px solid var(--border); color: var(--accent); padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; }
+
+        .stats { display: flex; gap: 1rem; margin-bottom: 2rem; width: 100%; }
+        .stat-card { 
+            flex: 1; background: var(--glass); padding: 1.2rem; border-radius: 12px; 
+            border: 1px solid var(--border); text-align: center;
+        }
+        .stat-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; }
+        .val { font-size: 1.6rem; font-weight: 800; color: #fff; margin-top: 0.4rem; }
+
+        .input-group { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+        input { 
+            flex: 1; padding: 1.2rem; background: rgba(0,0,0,0.4); border: 1px solid var(--border); 
+            color: white; border-radius: 8px; font-size: 1rem; outline: none; transition: border 0.2s;
+        }
+        input:focus { border-color: var(--accent); }
+        button.exec-btn { padding: 0 2rem; background: var(--accent); color: #000; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; }
+
+        .terminal { 
+            background: #000; padding: 1.5rem; border-radius: 8px; 
+            font-family: 'Courier New', monospace; color: #a7f3d0; height: 250px; 
+            overflow-y: auto; border: 1px solid var(--border); box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="top-bar">
+            <h2 style="margin:0; font-weight: 700; letter-spacing: 1px;">AIV-S/W <span style="color: var(--accent);">CORE</span></h2>
+            <button class="lang-btn" onclick="toggleLanguage()" id="langBtn">EN</button>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card"><div class="stat-label" id="lbl-lvl">Nivel Învățare</div><div class="val" id="lvl">--</div></div>
+            <div class="stat-card"><div class="stat-label" id="lbl-xp">Experiență (XP)</div><div class="val" id="xp">--</div></div>
+            <div class="stat-card"><div class="stat-label" id="lbl-acc">Acuratețe Model</div><div class="val" id="acc">--</div></div>
+            <div class="stat-card"><div class="stat-label" id="lbl-lr">Rată de Învățare</div><div class="val" id="lr">--</div></div>
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="taskInput" placeholder="Introdu o sarcină matematică sau logică...">
+            <button class="exec-btn" onclick="sendTask()" id="lbl-exec">Execută</button>
+        </div>
+
+        <div class="terminal" id="term"></div>
+    </div>
+
+    <script>
+        const API_URL = "https://aiv-core-api.onrender.com/";
+        let currentLang = "ro";
+
+        const dictionary = {
+            ro: {
+                placeholder: "Introdu o sarcină matematică sau logică...", exec: "Execută",
+                lblLvl: "Nivel Învățare", lblXp: "Experiență (XP)", lblAcc: "Acuratețe Model", lblLr: "Rată de Învățare",
+                init: "Sistem operațional local activat.", optAlert: "Prag critic atins. Se rulează optimizarea de tip: "
+            },
+            en: {
+                placeholder: "Enter a mathematical or logical task...", exec: "Execute",
+                lblLvl: "Learning Level", lblXp: "Experience (XP)", lblAcc: "Model Accuracy", lblLr: "Learning Rate",
+                init: "Local operational system activated.", optAlert: "Critical threshold reached. Running optimizer: "
+            }
+        };
+
+        function toggleLanguage() {
+            currentLang = currentLang === "ro" ? "en" : "ro";
+            document.getElementById('langBtn').innerText = currentLang === "ro" ? "EN" : "RO";
+            
+            document.getElementById('taskInput').placeholder = dictionary[currentLang].placeholder;
+            document.getElementById('lbl-exec').innerText = dictionary[currentLang].exec;
+            document.getElementById('lbl-lvl').innerText = dictionary[currentLang].lblLvl;
+            document.getElementById('lbl-xp').innerText = dictionary[currentLang].lblXp;
+            document.getElementById('lbl-acc').innerText = dictionary[currentLang].lblAcc;
+            document.getElementById('lbl-lr').innerText = dictionary[currentLang].lblLr;
+        }
+
+        function log(msg, isUser = false) {
+            const term = document.getElementById('term');
+            const prefix = isUser ? "> " : "|| ";
+            term.innerHTML += `<div style="color: ${isUser ? '#fff' : '#34d399'}">${prefix}${msg}</div>`;
+            term.scrollTop = term.scrollHeight;
+        }
+
+        async function updateStatus() {
+            try {
+                const res = await fetch(`${API_URL}/status`);
+                const data = await res.json();
+                document.getElementById('lvl').innerText = data.level;
+                document.getElementById('xp').innerText = data.xp;
+                document.getElementById('acc').innerText = data.accuracy + "%";
+            } catch (e) {
+                document.getElementById('lvl').innerText = "OFFLINE";
+            }
+        }
+
+        async function sendTask() {
+            const input = document.getElementById('taskInput');
+            const task = input.value.trim();
+            if(!task) return;
+            
+            log(task, true);
+            input.value = '';
+
+            try {
+                const res = await fetch(`${API_URL}/execute`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task: task })
+                });
+                
+                const data = await res.json();
+                log(data.response);
+                
+                if (data.optimizer_used !== "None") {
+                    log(`${dictionary[currentLang].optAlert} ${data.optimizer_used}`, false);
+                }
+
+                document.getElementById('lr').innerText = data.learning_rate;
+                updateStatus();
+            } catch (e) {
+                log("Backend core offline.");
+            }
+        }
+
+        log(dictionary[currentLang].init);
+        updateStatus();
+    </script>
+</body>
+</html>
