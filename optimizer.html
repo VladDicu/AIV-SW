@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>AIV-S/W - Genetic Optimizer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background: #0b0c10; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; }
+        #container { color: #c5c6c7; padding: 25px; border-radius: 12px; max-width: 1200px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: 1.2fr 1.3fr; gap: 20px; }
+        .panel { background: rgba(255,255,255,0.02); border: 1px solid rgba(66,220,219,0.2); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; }
+        .form { display: flex; gap: 8px; margin-bottom: 15px; }
+        input { background: #000; border: 1px solid rgba(69, 243, 255, 0.4); color: #fff; padding: 8px; border-radius: 4px; font-size: 0.85rem; width: 100%; box-sizing: border-box; }
+        .task-card { background: rgba(255,255,255,0.04); padding: 12px; border-radius: 6px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; position: relative; overflow: hidden; }
+        .task-meta { display: flex; justify-content: space-between; align-items: center; }
+        .live-allocation-box { display: flex; gap: 15px; background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem; }
+        .color-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }
+        .charts-row { display: flex; gap: 15px; height: 180px; margin-bottom: 15px; }
+        .chart-box { flex: 1; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; font-size: 0.8rem; color: #888; }
+        .chart-box canvas { max-height: 130px; }
+        button { background: #45f3ff; color: #000; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; text-transform: uppercase; letter-spacing: 1px; }
+        button:hover { background: #66fcf1; box-shadow: 0 0 10px rgba(69, 243, 255, 0.4); }
+        .btn-clear { background: transparent; color: #ff2a2a; border: 1px solid #ff2a2a; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; margin-bottom: 10px; align-self: flex-end; }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <header style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(69,243,255,0.2); padding-bottom:12px; margin-bottom:20px;">
+            <h2 style="color:#fff; margin:0; font-size:1.3rem; letter-spacing:1px;">AIV-S/W MULTI-RESOURCE CORE</h2>
+            <span id="status" style="color:#45f3ff; font-weight:bold; letter-spacing:1px;">SISTEM PREGĂTIT</span>
+        </header>
+
+        <div class="grid">
+            <div class="panel">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="color:#fff; margin:0 0 15px 0; font-size:1rem;">Gestiune Sarcini și Atribuire în Timp Real</h3>
+                        <button class="btn-clear" onclick="clearTasks()">Șterge tot</button>
+                    </div>
+                    <div class="form">
+                        <input type="text" id="tn" placeholder="Nume Sarcină">
+                        <input type="number" id="tc" placeholder="Cerere CPU">
+                        <input type="number" id="tr" placeholder="Cerere RAM">
+                        <button style="width:auto; padding: 8px 15px;" onclick="addTask()">+</button>
+                    </div>
+                    <div id="taskList" style="max-height: 320px; overflow-y: auto;"></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div>
+                    <h3 style="color:#fff; margin:0 0 15px 0; font-size:1rem;">Vizualizare Globală Subsisteme</h3>
+                    <div class="charts-row">
+                        <div class="chart-box"><canvas id="cpuChart"></canvas><div style="margin-top:5px;">Distribuție CPU</div></div>
+                        <div class="chart-box"><canvas id="ramChart"></canvas><div style="margin-top:5px;">Distribuție RAM</div></div>
+                    </div>
+                    <div style="height:100px; margin-bottom:15px; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 6px;">
+                        <canvas id="lineChart"></canvas>
+                    </div>
+                </div>
+                <button onclick="runGA()">Pornește Optimizarea Genetică</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://aiv-core-api.onrender.com"; // Asigură-te că linkul e corect
+        let cpuChart, ramChart, lineChart;
+        const colors = ['#45f3ff', '#deff9a', '#ff2a2a', '#f8e71c', '#a855f7', '#f43f5e', '#10b981'];
+
+        function initCharts() {
+            const chartCfg = () => ({
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [100], backgroundColor: ['#1f2833'], borderWidth: 1, borderColor: '#000' }] },
+                options: { cutout: '75%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+            cpuChart = new Chart(document.getElementById('cpuChart'), chartCfg());
+            ramChart = new Chart(document.getElementById('ramChart'), chartCfg());
+            lineChart = new Chart(document.getElementById('lineChart'), {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderColor: '#45f3ff', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.2 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false }, ticks: { color: '#555', font: { size: 9 } } } } }
+            });
+        }
+
+        async function updateList() {
+            const res = await fetch(`${API_URL}/ga/tasks`);
+            const tasks = await res.json();
+            const listEl = document.getElementById('taskList');
+            
+            if(tasks.length === 0) {
+                listEl.innerHTML = '<div style="color:#555; text-align:center; padding:20px; font-size:0.9rem;">Nicio sarcină introdusă.</div>';
+                return;
+            }
+
+            listEl.innerHTML = tasks.map((t, idx) => {
+                const taskColor = colors[idx % colors.length];
+                return `
+                    <div class="task-card" style="padding-left: 18px;">
+                        <div class="color-bar" style="background: ${taskColor}"></div>
+                        <div class="task-meta">
+                            <strong style="color:#fff;">${t.name}</strong>
+                            <span style="font-size:0.75rem; color:#666;">Țintă: C:${t.cpu_weight} | R:${t.ram_weight}</span>
+                        </div>
+                        <div class="live-allocation-box">
+                            <div>CPU Alocat: <span id="live-cpu-${idx}" style="color:${taskColor}; font-weight:bold;">0.0%</span></div>
+                            <div>RAM Alocat: <span id="live-ram-${idx}" style="color:${taskColor}; font-weight:bold;">0.0%</span></div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        async function addTask() {
+            const name = document.getElementById('tn').value || `Task ${Math.floor(Math.random()*100)}`;
+            const cpu = parseInt(document.getElementById('tc').value) || 10;
+            const ram = parseInt(document.getElementById('tr').value) || 10;
+
+            await fetch(`${API_URL}/ga/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, cpu, ram })
+            });
+            
+            updateList();
+            document.getElementById('tn').value = '';
+            document.getElementById('tc').value = '';
+            document.getElementById('tr').value = '';
+        }
+
+        async function clearTasks() {
+            await fetch(`${API_URL}/ga/clear`, { method: 'POST' });
+            updateList();
+        }
+
+        async function runGA() {
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = "CALCUL EVOLUTIV DINAMIC...";
+            statusEl.style.color = "#f8e71c";
+
+            lineChart.data.labels = [];
+            lineChart.data.datasets[0].data = [];
+            lineChart.update();
+
+            const res = await fetch(`${API_URL}/ga/run`);
+            const data = await res.json();
+
+            if(data.error) {
+                alert(data.error);
+                statusEl.innerText = "EROARE";
+                statusEl.style.color = "#ff2a2a";
+                return;
+            }
+
+            let g = 0;
+            function animate() {
+                if(g < data.history.length) {
+                    const frameData = data.history[g];
+                    const activeColors = colors.slice(0, data.tasks.length);
+
+                    cpuChart.data.labels = data.tasks.map(t => t.name);
+                    cpuChart.data.datasets[0].data = frameData.cpu;
+                    cpuChart.data.datasets[0].backgroundColor = activeColors;
+                    cpuChart.update();
+
+                    ramChart.data.labels = data.tasks.map(t => t.name);
+                    ramChart.data.datasets[0].data = frameData.ram;
+                    ramChart.data.datasets[0].backgroundColor = activeColors;
+                    ramChart.update();
+
+                    data.tasks.forEach((t, idx) => {
+                        const cpuSpan = document.getElementById(`live-cpu-${idx}`);
+                        const ramSpan = document.getElementById(`live-ram-${idx}`);
+                        if(cpuSpan) cpuSpan.innerText = frameData.cpu[idx] + '%';
+                        if(ramSpan) ramSpan.innerText = frameData.ram[idx] + '%';
+                    });
+
+                    lineChart.data.labels.push(`G${frameData.gen}`);
+                    lineChart.data.datasets[0].data.push(frameData.score);
+                    lineChart.update();
+
+                    g++;
+                    setTimeout(animate, 90);
+                } else {
+                    statusEl.innerText = "ALOCARE OPTIMĂ STABILITĂ";
+                    statusEl.style.color = "#4df884";
+                }
+            }
+            animate();
+        }
+
+        setTimeout(() => { initCharts(); updateList(); }, 300);
+    </script>
+</body>
+</html>
