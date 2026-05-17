@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>AIV-S/W | Neural Training</title>
+    <style>
+        body { background: #0b0c10; color: #c5c6c7; font-family: 'Segoe UI', sans-serif; padding: 2rem; display: flex; flex-direction: column; align-items: center; }
+        .container { background: rgba(255,255,255,0.02); border: 1px solid rgba(69, 243, 255, 0.2); padding: 2rem; border-radius: 12px; width: 100%; max-width: 600px; text-align: center; }
+        input { width: 90%; padding: 1rem; background: #000; border: 1px solid #333; color: #fff; border-radius: 6px; margin-bottom: 1rem; font-size: 1rem; }
+        .btn-predict { background: #45f3ff; color: #000; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }
+        .btn-predict:hover { box-shadow: 0 0 10px rgba(69,243,255,0.4); }
+        .feedback-panel { margin-top: 1.5rem; display: none; padding: 1rem; border-top: 1px solid #333; }
+        .btn-fb { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin: 0 10px; }
+        .btn-corect { background: #10b981; color: #fff; }
+        .btn-gresit { background: #f43f5e; color: #fff; }
+        #result { margin-top: 1rem; font-family: monospace; color: #a855f7; font-size: 1.1rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="color: #fff; margin-top: 0;">Laborator de Antrenament Neural</h2>
+        <p style="font-size: 0.85rem; color: #888; margin-bottom: 2rem;">Rețeaua învață să clasifice sarcinile în Categoria 0 (Logic) sau Categoria 1 (Matematic).</p>
+
+        <input type="text" id="taskInput" placeholder="Introdu o sarcină scurtă...">
+        <button class="btn-predict" onclick="predict()">Cere Decizia Rețelei</button>
+
+        <div id="result"></div>
+
+        <div class="feedback-panel" id="feedback-panel">
+            <p>A ghicit corect categoria?</p>
+            <button class="btn-fb btn-corect" onclick="sendFeedback(true)">DA (Confirmă)</button>
+            <button class="btn-fb btn-gresit" onclick="sendFeedback(false)">NU (Penalizează)</button>
+        </div>
+    </div>
+
+    <script>
+        const HF_URL = "https://vladutz03-aiv-neural-core.hf.space";
+        let currentVector = [];
+        let lastDecision = null;
+
+        // Transformăm textul într-un vector numeric pe care rețeaua îl înțelege
+        function textToVector(text) {
+            return [
+                text.length, 
+                (text.match(/[aeiouăâî]/gi) || []).length, 
+                (text.match(/[0-9]/g) || []).length, 
+                (text.split(" ").length - 1), 
+                (text.match(/[+\-*/=()]/g) || []).length
+            ];
+        }
+
+        async function predict() {
+            const text = document.getElementById('taskInput').value;
+            if (!text) return;
+            
+            currentVector = textToVector(text);
+            document.getElementById('result').innerHTML = "Calculează...";
+
+            try {
+                const res = await fetch(`${HF_URL}/predict`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vector: currentVector })
+                });
+                const data = await res.json();
+                lastDecision = data.decision;
+
+                document.getElementById('result').innerHTML = `Clasificare: <b>Categoria ${lastDecision}</b> <br><span style="font-size:0.8rem; color:#666;">(Încredere: ${data.confidence}%)</span>`;
+                document.getElementById('feedback-panel').style.display = 'block';
+            } catch (e) {
+                document.getElementById('result').innerHTML = "<span style='color:red;'>Eroare de conexiune cu Hugging Face.</span>";
+            }
+        }
+
+        async function sendFeedback(isCorrect) {
+            // Calculăm ce ar fi trebuit să răspundă de fapt
+            const correctLabel = isCorrect ? lastDecision : (lastDecision === 0 ? 1 : 0);
+
+            try {
+                const res = await fetch(`${HF_URL}/learn`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vector: currentVector, correct_label: correctLabel })
+                });
+                const data = await res.json();
+
+                document.getElementById('result').innerHTML += `<br><br><span style="color:#10b981;">⚡ ${data.status} | Eroare actualizată: ${data.error_rate.toFixed(4)}</span>`;
+                document.getElementById('feedback-panel').style.display = 'none';
+            } catch (e) {
+                document.getElementById('result').innerHTML += "<br><span style='color:red;'>Eroare la antrenament.</span>";
+            }
+        }
+    </script>
+</body>
+</html>
